@@ -1,62 +1,31 @@
-<div id="app-root"></div>
-<script>
-  // Versão standalone (fora do Claude): salva os dados no navegador do próprio aparelho,
-  // usando o mesmo formato de chamadas (get/set) que o app já usa.
-  window.storage = {
-    get: async (key, shared) => {
-      const raw = localStorage.getItem('placar_'+key);
-      if(raw===null) return null;
-      return {key, value: raw, shared: !!shared};
-    },
-    set: async (key, value, shared) => {
-      localStorage.setItem('placar_'+key, value);
-      return {key, value, shared: !!shared};
-    },
-    delete: async (key, shared) => {
-      localStorage.removeItem('placar_'+key);
-      return {key, deleted:true, shared: !!shared};
-    },
-    list: async (prefix, shared) => {
-      const keys = Object.keys(localStorage)
-        .filter(k=>k.startsWith('placar_'+(prefix||'')))
-        .map(k=>k.replace('placar_',''));
-      return {keys, prefix, shared: !!shared};
-    }
-  };
-</script>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Placar do dia</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
   :root{
-    --paper:#EDEAE1;
-    --paper-warm:#F4F2EA;
-    --card:#FFFFFF;
-    --ink:#262622;
-    --ink-soft:#5B5B54;
-    --line:#DAD6C8;
-    --pine:#3B6E5E;
-    --pine-soft:#E3EEE9;
-    --brick:#B0483D;
-    --brick-soft:#F6E5E1;
-    --ochre:#C69A2A;
-    --ochre-soft:#FBF0D9;
+    --paper:#EDEAE1; --paper-warm:#F4F2EA; --card:#FFFFFF; --ink:#262622; --ink-soft:#5B5B54;
+    --line:#DAD6C8; --pine:#3B6E5E; --pine-soft:#E3EEE9; --brick:#B0483D; --brick-soft:#F6E5E1;
+    --ochre:#C69A2A; --ochre-soft:#FBF0D9;
   }
   *{box-sizing:border-box;}
-  #app-root{
-    font-family:'Inter',sans-serif;
-    color:var(--ink);
-    background:var(--paper);
-    min-height:100vh;
-    padding:0;
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Inter',sans-serif; color:var(--ink); background:var(--paper); min-height:100vh;
     -webkit-font-smoothing:antialiased;
   }
+  #app-root{min-height:100vh;}
   .wrap{max-width:960px;margin:0 auto;padding:20px 16px 60px;}
 
   .topbar{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px;}
   .brand{font-family:'Fraunces',serif;font-style:italic;font-weight:600;font-size:28px;letter-spacing:-0.01em;}
   .brand span{font-style:normal;color:var(--pine);}
-  .tabs{display:flex;gap:6px;background:var(--paper-warm);border:1px solid var(--line);border-radius:10px;padding:4px;flex-wrap:wrap;}
-  .tab-btn{font-family:'Inter';font-size:13px;font-weight:600;padding:8px 12px;border:none;background:transparent;border-radius:7px;cursor:pointer;color:var(--ink-soft);transition:.15s;white-space:nowrap;}
+  .tabs{display:flex;gap:6px;background:var(--paper-warm);border:1px solid var(--line);border-radius:10px;padding:4px;flex-wrap:wrap;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .tab-btn{font-family:'Inter';font-size:13px;font-weight:600;padding:9px 12px;border:none;background:transparent;border-radius:7px;cursor:pointer;color:var(--ink-soft);transition:.15s;white-space:nowrap;}
   .tab-btn.active{background:var(--ink);color:var(--paper-warm);}
   .tab-btn:hover:not(.active){background:rgba(0,0,0,0.06);}
 
@@ -71,6 +40,10 @@
   .sum-card{background:var(--paper-warm);border:1px solid var(--line);border-radius:10px;padding:12px 14px;}
   .sum-card .num{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;color:var(--pine);}
   .sum-card .lbl{font-size:10.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
+
+  .hero-counter{background:linear-gradient(135deg,var(--ink),#3a3a34);color:var(--paper-warm);border-radius:14px;padding:22px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  .hero-counter .big{font-family:'IBM Plex Mono',monospace;font-size:40px;font-weight:600;line-height:1;}
+  .hero-counter .txt{font-family:'Fraunces',serif;font-style:italic;font-size:16px;max-width:280px;}
 
   .goal-row{display:flex;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid var(--line);}
   .goal-row:last-child{border-bottom:none;}
@@ -108,7 +81,6 @@
   .manage-row:last-child{border-bottom:none;}
   .manage-top{display:flex;align-items:center;gap:12px;}
   .manage-name{flex:1;font-weight:600;font-size:14px;}
-  .goal-del{flex:none;}
   .manage-days{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
 
   .week-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
@@ -138,7 +110,7 @@
   .bar-track{flex:1;height:10px;background:var(--paper-warm);border-radius:6px;overflow:hidden;border:1px solid var(--line);}
   .bar-fill{height:100%;background:var(--pine);border-radius:6px;transition:width .3s ease;}
   .bar-fill.low{background:var(--brick);}
-  .bar-pct{width:44px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;}
+  .bar-pct{width:56px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;}
 
   .section-title{font-family:'Fraunces',serif;font-style:italic;font-size:20px;margin:26px 0 10px;}
   .section-title:first-child{margin-top:0;}
@@ -157,7 +129,68 @@
 
   .chart-box{background:var(--paper-warm);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px;}
   .chart-title{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;margin-bottom:10px;}
+
+  .subject-card{background:var(--paper-warm);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px;}
+  .subject-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px;}
+  .subject-name-input{font-family:'Fraunces',serif;font-style:italic;font-size:18px;border:none;background:transparent;flex:1;outline:none;color:var(--ink);}
+  .subject-pct{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--pine);font-size:14px;flex:none;}
+  .material-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);}
+  .material-row:last-child{border-bottom:none;}
+  .material-name-input{flex:1;border:none;background:transparent;font-size:14px;color:var(--ink);outline:none;font-family:'Inter';}
+  .add-material-form{display:flex;gap:6px;margin-top:10px;}
+  .add-material-form input{flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-size:13px;background:var(--card);}
+  .add-material-form button{padding:8px 14px;border:none;border-radius:7px;background:var(--pine);color:#fff;font-weight:700;cursor:pointer;font-size:13px;}
+  .add-subject-form{display:flex;gap:8px;margin-bottom:16px;}
+  .add-subject-form input{flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper-warm);font-size:14px;}
+  .add-subject-form button{padding:10px 18px;border:none;border-radius:8px;background:var(--pine);color:#fff;font-weight:700;cursor:pointer;font-size:14px;}
+
+  @media (max-width: 640px){
+    .wrap{padding:14px 10px 50px;}
+    .brand{font-size:23px;}
+    .notebook{padding:20px 14px 20px 30px;border-radius:12px;}
+    .spiral{left:9px;width:9px;}
+    .spiral i{width:6px;height:6px;}
+    .date-hero{font-size:25px;}
+    .tab-btn{font-size:12.5px;padding:9px 10px;}
+    .goal-name{font-size:14.5px;}
+    .chk,.cell-box{width:30px;height:30px;}
+    .grid-table{font-size:11px;}
+    .bar-name{width:110px;font-size:12px;}
+    .extras-block{grid-template-columns:1fr;}
+    .hero-counter .big{font-size:32px;}
+    .summary-strip{grid-template-columns:repeat(2,1fr);}
+    .close-day-btn{padding:16px;font-size:15px;}
+  }
 </style>
+</head>
+<body>
+<div id="app-root"></div>
+<script>
+  if(!window.storage){
+    // Versão standalone (fora do Claude): salva os dados no navegador do próprio aparelho.
+    window.storage = {
+      get: async (key, shared) => {
+        const raw = localStorage.getItem('placar_'+key);
+        if(raw===null) return null;
+        return {key, value: raw, shared: !!shared};
+      },
+      set: async (key, value, shared) => {
+        localStorage.setItem('placar_'+key, value);
+        return {key, value, shared: !!shared};
+      },
+      delete: async (key, shared) => {
+        localStorage.removeItem('placar_'+key);
+        return {key, deleted:true, shared: !!shared};
+      },
+      list: async (prefix, shared) => {
+        const keys = Object.keys(localStorage)
+          .filter(k=>k.startsWith('placar_'+(prefix||'')))
+          .map(k=>k.replace('placar_',''));
+        return {keys, prefix, shared: !!shared};
+      }
+    };
+  }
+</script>
 <script type="text/babel" data-presets="react">
 const {useState,useEffect,useCallback,useMemo} = React;
 
@@ -170,14 +203,13 @@ function fmtDate(d){
   return y+'-'+m+'-'+day;
 }
 function dow(d){ return (d.getDay()+6)%7; }
-function startOfWeek(d){
-  const date = new Date(d);
-  date.setDate(date.getDate()-dow(date));
-  date.setHours(0,0,0,0);
-  return date;
-}
+function startOfWeek(d){ const date = new Date(d); date.setDate(date.getDate()-dow(date)); date.setHours(0,0,0,0); return date; }
 function addDays(d,n){ const nd=new Date(d); nd.setDate(nd.getDate()+n); return nd; }
 function daysInMonth(year,month){ return new Date(year,month+1,0).getDate(); }
+function daysLeftInYear(today){
+  const end = new Date(today.getFullYear(),11,31);
+  return Math.max(0, Math.round((end-today)/(1000*60*60*24)));
+}
 
 const DEFAULT_GOALS = [
   {id:'g1', name:'Acordar cedo 5:30', days:[0,1,2,3,4]},
@@ -190,9 +222,12 @@ const DEFAULT_GOALS = [
   {id:'g8', name:'Check de metas e finanças', days:[5,6]},
 ];
 
-function CheckIcon(){
-  return <svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6"/></svg>;
-}
+const DEFAULT_SUBJECTS = [
+  {id:'s1', name:'Economia', materials:[1,2,3,4,5].map(n=>({id:'s1m'+n,name:'Matéria '+n,done:false,archived:false}))},
+  {id:'s2', name:'Finanças', materials:[1,2,3,4,5].map(n=>({id:'s2m'+n,name:'Matéria '+n,done:false,archived:false}))},
+];
+
+function CheckIcon(){ return <svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6"/></svg>; }
 function StampSVG({ok}){
   return (
     <svg viewBox="0 0 100 100">
@@ -203,7 +238,6 @@ function StampSVG({ok}){
     </svg>
   );
 }
-
 function DayPicker({selected,onToggle}){
   return (
     <div className="day-picker">
@@ -213,7 +247,6 @@ function DayPicker({selected,onToggle}){
     </div>
   );
 }
-
 function WeightChart({points}){
   if(points.length<2) return <div style={{fontSize:13,color:'var(--ink-soft)'}}>Registre o peso por pelo menos 2 dias pra ver a evolução aqui.</div>;
   const w=560,h=160,pad=28;
@@ -225,15 +258,12 @@ function WeightChart({points}){
   return (
     <svg viewBox={'0 0 '+w+' '+h} style={{width:'100%',height:160}}>
       <path d={path} fill="none" stroke="#3B6E5E" strokeWidth="2.5"/>
-      {points.map((p,i)=>(
-        <circle key={i} cx={pad+i*xStep} cy={scaleY(p.v)} r="3.5" fill="#3B6E5E"/>
-      ))}
+      {points.map((p,i)=>(<circle key={i} cx={pad+i*xStep} cy={scaleY(p.v)} r="3.5" fill="#3B6E5E"/>))}
       <text x={pad} y={14} fontSize="11" fontFamily="IBM Plex Mono, monospace" fill="#5B5B54">{max.toFixed(1)}kg</text>
       <text x={pad} y={h-6} fontSize="11" fontFamily="IBM Plex Mono, monospace" fill="#5B5B54">{min.toFixed(1)}kg</text>
     </svg>
   );
 }
-
 function CaloriesChart({points}){
   if(points.length===0) return <div style={{fontSize:13,color:'var(--ink-soft)'}}>Registre calorias queimadas pra ver o gráfico aqui.</div>;
   const w=560,h=160,pad=24;
@@ -244,11 +274,30 @@ function CaloriesChart({points}){
     <svg viewBox={'0 0 '+w+' '+h} style={{width:'100%',height:160}}>
       {points.map((p,i)=>{
         const bh = (p.v/max)*(h-pad*2);
-        const x = pad+i*gap;
-        const y = h-pad-bh;
+        const x = pad+i*gap; const y = h-pad-bh;
         return <rect key={i} x={x} y={y} width={barW} height={bh} rx="3" fill="#C69A2A"/>;
       })}
     </svg>
+  );
+}
+function MetaRealizadoChart({data}){
+  if(data.length===0) return <div style={{fontSize:13,color:'var(--ink-soft)'}}>Cadastre metas pra ver o comparativo aqui.</div>;
+  const max = Math.max(...data.map(d=>Math.max(d.meta,d.realizado)),1);
+  return (
+    <div>
+      {data.map(d=>(
+        <div key={d.id} style={{marginBottom:10}}>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:3}}>
+            <span style={{fontWeight:600}}>{d.name}</span>
+            <span style={{fontFamily:'IBM Plex Mono, monospace',color:'var(--ink-soft)'}}>{d.realizado}/{d.meta}</span>
+          </div>
+          <div style={{position:'relative',height:10,background:'var(--card)',borderRadius:6,border:'1px solid var(--line)',overflow:'hidden'}}>
+            <div style={{position:'absolute',left:0,top:0,bottom:0,width:(d.meta/max*100)+'%',background:'var(--line)'}}></div>
+            <div style={{position:'absolute',left:0,top:0,bottom:0,width:(d.realizado/max*100)+'%',background:'var(--pine)'}}></div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -257,17 +306,21 @@ function App(){
   const [goals,setGoals] = useState(DEFAULT_GOALS);
   const [logs,setLogs] = useState({});
   const [extras,setExtras] = useState({});
+  const [subjects,setSubjects] = useState(DEFAULT_SUBJECTS);
   const [tab,setTab] = useState('hoje');
   const [weekOffset,setWeekOffset] = useState(0);
   const [modal,setModal] = useState(null);
   const [newGoalName,setNewGoalName] = useState('');
   const [newGoalDays,setNewGoalDays] = useState([0,1,2,3,4]);
+  const [newSubjectName,setNewSubjectName] = useState('');
+  const [newMaterialName,setNewMaterialName] = useState({});
 
   useEffect(()=>{
     (async ()=>{
       try{ const g = await window.storage.get('goals', false); if(g && g.value) setGoals(JSON.parse(g.value)); }catch(e){}
       try{ const l = await window.storage.get('logs', false); if(l && l.value) setLogs(JSON.parse(l.value)); }catch(e){}
       try{ const ex = await window.storage.get('extras', false); if(ex && ex.value) setExtras(JSON.parse(ex.value)); }catch(e){}
+      try{ const sub = await window.storage.get('estudos', false); if(sub && sub.value) setSubjects(JSON.parse(sub.value)); }catch(e){}
       setLoaded(true);
     })();
   },[]);
@@ -275,6 +328,7 @@ function App(){
   const saveGoals = useCallback(async (next)=>{ setGoals(next); try{ await window.storage.set('goals', JSON.stringify(next), false); }catch(e){console.error(e);} },[]);
   const saveLogs = useCallback(async (next)=>{ setLogs(next); try{ await window.storage.set('logs', JSON.stringify(next), false); }catch(e){console.error(e);} },[]);
   const saveExtras = useCallback(async (next)=>{ setExtras(next); try{ await window.storage.set('extras', JSON.stringify(next), false); }catch(e){console.error(e);} },[]);
+  const saveSubjects = useCallback(async (next)=>{ setSubjects(next); try{ await window.storage.set('estudos', JSON.stringify(next), false); }catch(e){console.error(e);} },[]);
 
   const toggleLog = (dateKey, goalId)=>{
     const day = {...(logs[dateKey]||{})};
@@ -367,8 +421,7 @@ function App(){
     if(!newGoalName.trim() || newGoalDays.length===0) return;
     const id = 'g'+Date.now();
     saveGoals([...goals, {id, name:newGoalName.trim(), days:[...newGoalDays].sort()}]);
-    setNewGoalName('');
-    setNewGoalDays([0,1,2,3,4]);
+    setNewGoalName(''); setNewGoalDays([0,1,2,3,4]);
   };
   const deleteGoal = (id)=>{ saveGoals(goals.filter(g=>g.id!==id)); };
   const toggleGoalDay = (goalId, dayIdx)=>{
@@ -385,16 +438,69 @@ function App(){
 
   const weightPoints = useMemo(()=>{
     return Object.keys(extras).filter(k=>extras[k].weight!=null && extras[k].weight!=='')
-      .sort()
-      .map(k=>({date:k, v:parseFloat(extras[k].weight)}))
-      .filter(p=>!isNaN(p.v));
+      .sort().map(k=>({date:k, v:parseFloat(extras[k].weight)})).filter(p=>!isNaN(p.v));
   },[extras]);
-
   const caloriesPoints = useMemo(()=>{
     const dates = [];
     for(let i=13;i>=0;i--) dates.push(fmtDate(addDays(today,-i)));
     return dates.map(k=>({date:k, v: (extras[k] && extras[k].calories) ? parseFloat(extras[k].calories) : 0}));
   },[extras]);
+
+  const goalsForChart = useMemo(()=> monthStats.map(s=>({id:s.id,name:s.name,meta:s.meta,realizado:s.realizado})), [monthStats]);
+
+  // ---- Estudos helpers ----
+  const addSubject = (e)=>{
+    e.preventDefault();
+    if(!newSubjectName.trim()) return;
+    const id='sub'+Date.now();
+    saveSubjects([...subjects, {id, name:newSubjectName.trim(), materials:[]}]);
+    setNewSubjectName('');
+  };
+  const renameSubject = (id, name)=>{
+    saveSubjects(subjects.map(s=> s.id===id? {...s, name} : s));
+  };
+  const addMaterial = (subjectId)=>{
+    const name = (newMaterialName[subjectId]||'').trim();
+    if(!name) return;
+    saveSubjects(subjects.map(s=>{
+      if(s.id!==subjectId) return s;
+      return {...s, materials:[...s.materials, {id:'mat'+Date.now(), name, done:false, archived:false}]};
+    }));
+    setNewMaterialName({...newMaterialName, [subjectId]:''});
+  };
+  const toggleMaterialDone = (subjectId, matId)=>{
+    saveSubjects(subjects.map(s=>{
+      if(s.id!==subjectId) return s;
+      return {...s, materials: s.materials.map(m=> m.id===matId? {...m, done:!m.done} : m)};
+    }));
+  };
+  const renameMaterial = (subjectId, matId, name)=>{
+    saveSubjects(subjects.map(s=>{
+      if(s.id!==subjectId) return s;
+      return {...s, materials: s.materials.map(m=> m.id===matId? {...m, name} : m)};
+    }));
+  };
+  const archiveMaterial = (subjectId, matId)=>{
+    saveSubjects(subjects.map(s=>{
+      if(s.id!==subjectId) return s;
+      return {...s, materials: s.materials.map(m=> m.id===matId? {...m, archived:true} : m)};
+    }));
+  };
+
+  const subjectsProgress = useMemo(()=> subjects.map(s=>{
+    const total = s.materials.length;
+    const done = s.materials.filter(m=>m.done).length;
+    const pct = total>0? Math.round((done/total)*100) : 0;
+    return {...s, total, done, pct};
+  }), [subjects]);
+
+  const estudosOverall = useMemo(()=>{
+    const total = subjectsProgress.reduce((a,s)=>a+s.total,0);
+    const done = subjectsProgress.reduce((a,s)=>a+s.done,0);
+    return {total, done, pct: total>0? Math.round((done/total)*100):0};
+  },[subjectsProgress]);
+
+  const diasFimAno = daysLeftInYear(today);
 
   if(!loaded){ return <div className="loading">carregando seu placar...</div>; }
 
@@ -480,16 +586,10 @@ function App(){
                     const isToday = key===todayKey;
                     const applicable = g.days.includes(i);
                     const on = logs[key] && logs[key][g.id];
-                    if(!applicable){
-                      return <td key={i}><div className="cell-box disabled"></div></td>;
-                    }
+                    if(!applicable){ return <td key={i}><div className="cell-box disabled"></div></td>; }
                     return (
                       <td key={i}>
-                        <div
-                          className={"cell-box"+(on?' on':'')+(isToday?' today-col':'')}
-                          style={isFuture?{opacity:.35,cursor:'default'}:{}}
-                          onClick={()=>{ if(!isFuture) toggleLog(key,g.id); }}
-                        >
+                        <div className={"cell-box"+(on?' on':'')+(isToday?' today-col':'')} style={isFuture?{opacity:.35,cursor:'default'}:{}} onClick={()=>{ if(!isFuture) toggleLog(key,g.id); }}>
                           {on && <CheckIcon/>}
                         </div>
                       </td>
@@ -508,7 +608,6 @@ function App(){
               <div className="bar-pct">{s.pct}%</div>
             </div>
           ))}
-
           <div className="stats-strip">
             <div className="stat-card pine"><div className="num">{overallWeek}%</div><div className="lbl">concluído</div></div>
             <div className="stat-card brick"><div className="num">{100-overallWeek}%</div><div className="lbl">faltando</div></div>
@@ -539,16 +638,34 @@ function App(){
       {tab==='dashboard' && (
         <div className="notebook">
           <div className="spiral">{Array.from({length:9}).map((_,i)=><i key={i}></i>)}</div>
-          <div className="section-title" style={{marginTop:0}}>Evolução do peso</div>
-          <div className="chart-box">
-            <div className="chart-title">peso registrado ao longo do tempo</div>
-            <WeightChart points={weightPoints}/>
+
+          <div className="hero-counter">
+            <div>
+              <div className="big">{diasFimAno}</div>
+              <div style={{fontSize:11,textTransform:'uppercase',letterSpacing:'.05em',opacity:.8,fontFamily:"'IBM Plex Mono',monospace"}}>dias até o fim de {today.getFullYear()}</div>
+            </div>
+            <div className="txt">o tempo passa rápido — cada check é um passo a mais nas suas metas de 2026.</div>
           </div>
+
+          <div className="stats-strip" style={{marginBottom:10}}>
+            <div className="stat-card pine"><div className="num">{overallMonth}%</div><div className="lbl">metas — mês</div></div>
+            <div className="stat-card pine"><div className="num">{estudosOverall.pct}%</div><div className="lbl">estudos concluídos</div></div>
+            <div className="stat-card"><div className="num">{weightPoints.length? weightPoints[weightPoints.length-1].v.toFixed(1)+'kg' : '—'}</div><div className="lbl">peso mais recente</div></div>
+          </div>
+
+          <div className="section-title">Metas: meta x realizado (mês)</div>
+          <div className="chart-box"><MetaRealizadoChart data={goalsForChart}/></div>
+
+          <div className="section-title">Estudos por matéria</div>
+          <div className="chart-box">
+            <MetaRealizadoChart data={subjectsProgress.map(s=>({id:s.id,name:s.name,meta:s.total||1,realizado:s.done}))}/>
+          </div>
+
+          <div className="section-title">Evolução do peso</div>
+          <div className="chart-box"><div className="chart-title">peso registrado ao longo do tempo</div><WeightChart points={weightPoints}/></div>
+
           <div className="section-title">Calorias queimadas por dia</div>
-          <div className="chart-box">
-            <div className="chart-title">últimos 14 dias</div>
-            <CaloriesChart points={caloriesPoints}/>
-          </div>
+          <div className="chart-box"><div className="chart-title">últimos 14 dias</div><CaloriesChart points={caloriesPoints}/></div>
         </div>
       )}
 
@@ -556,11 +673,44 @@ function App(){
         <div className="notebook">
           <div className="spiral">{Array.from({length:9}).map((_,i)=><i key={i}></i>)}</div>
           <div className="section-title" style={{marginTop:0}}>Estudos</div>
-          <div className="empty">
-            Em breve: cadastre suas matérias com a lista de PDFs de cada uma, marque os que já leu,
-            e acompanhe o % concluído por matéria. Me conta como você quer organizar (nomes das matérias,
-            quantos materiais em cada) que eu construo essa parte.
+          <div className="summary-strip" style={{marginBottom:20}}>
+            <div className="sum-card"><div className="num">{estudosOverall.pct}%</div><div className="lbl">concluído no total</div></div>
+            <div className="sum-card"><div className="num">{estudosOverall.done}/{estudosOverall.total}</div><div className="lbl">materiais lidos</div></div>
           </div>
+
+          <form className="add-subject-form" onSubmit={addSubject}>
+            <input placeholder="Nova matéria (ex: Contabilidade)" value={newSubjectName} onChange={e=>setNewSubjectName(e.target.value)} />
+            <button type="submit">Adicionar matéria</button>
+          </form>
+
+          {subjectsProgress.map(s=>(
+            <div className="subject-card" key={s.id}>
+              <div className="subject-head">
+                <input className="subject-name-input" value={s.name} onChange={e=>renameSubject(s.id, e.target.value)} />
+                <div className="subject-pct">{s.done}/{s.total} · {s.pct}%</div>
+              </div>
+              <div className="bar-track" style={{marginBottom:10}}>
+                <div className={"bar-fill"+(s.pct<50?' low':'')} style={{width:s.pct+'%'}}></div>
+              </div>
+
+              {s.materials.filter(m=>!m.archived).length===0 && <div className="empty" style={{padding:'10px 0'}}>Nenhum material ainda.</div>}
+
+              {s.materials.filter(m=>!m.archived).map(m=>(
+                <div className="material-row" key={m.id}>
+                  <div className={"chk"+(m.done?' done':'')} style={{width:22,height:22}} onClick={()=>toggleMaterialDone(s.id,m.id)}>
+                    {m.done && <CheckIcon/>}
+                  </div>
+                  <input className="material-name-input" value={m.name} onChange={e=>renameMaterial(s.id,m.id,e.target.value)} />
+                  <button className="goal-del" onClick={()=>archiveMaterial(s.id,m.id)} title="remover da lista (histórico é mantido)">✕</button>
+                </div>
+              ))}
+
+              <div className="add-material-form">
+                <input placeholder="Novo material (ex: Capítulo 6)" value={newMaterialName[s.id]||''} onChange={e=>setNewMaterialName({...newMaterialName,[s.id]:e.target.value})} />
+                <button onClick={()=>addMaterial(s.id)}>Adicionar</button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -611,3 +761,5 @@ ReactDOM.createRoot(document.getElementById('app-root')).render(<App/>);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+</body>
+</html>
