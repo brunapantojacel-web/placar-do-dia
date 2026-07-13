@@ -1,0 +1,613 @@
+<div id="app-root"></div>
+<script>
+  // Versão standalone (fora do Claude): salva os dados no navegador do próprio aparelho,
+  // usando o mesmo formato de chamadas (get/set) que o app já usa.
+  window.storage = {
+    get: async (key, shared) => {
+      const raw = localStorage.getItem('placar_'+key);
+      if(raw===null) return null;
+      return {key, value: raw, shared: !!shared};
+    },
+    set: async (key, value, shared) => {
+      localStorage.setItem('placar_'+key, value);
+      return {key, value, shared: !!shared};
+    },
+    delete: async (key, shared) => {
+      localStorage.removeItem('placar_'+key);
+      return {key, deleted:true, shared: !!shared};
+    },
+    list: async (prefix, shared) => {
+      const keys = Object.keys(localStorage)
+        .filter(k=>k.startsWith('placar_'+(prefix||'')))
+        .map(k=>k.replace('placar_',''));
+      return {keys, prefix, shared: !!shared};
+    }
+  };
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --paper:#EDEAE1;
+    --paper-warm:#F4F2EA;
+    --card:#FFFFFF;
+    --ink:#262622;
+    --ink-soft:#5B5B54;
+    --line:#DAD6C8;
+    --pine:#3B6E5E;
+    --pine-soft:#E3EEE9;
+    --brick:#B0483D;
+    --brick-soft:#F6E5E1;
+    --ochre:#C69A2A;
+    --ochre-soft:#FBF0D9;
+  }
+  *{box-sizing:border-box;}
+  #app-root{
+    font-family:'Inter',sans-serif;
+    color:var(--ink);
+    background:var(--paper);
+    min-height:100vh;
+    padding:0;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:960px;margin:0 auto;padding:20px 16px 60px;}
+
+  .topbar{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px;}
+  .brand{font-family:'Fraunces',serif;font-style:italic;font-weight:600;font-size:28px;letter-spacing:-0.01em;}
+  .brand span{font-style:normal;color:var(--pine);}
+  .tabs{display:flex;gap:6px;background:var(--paper-warm);border:1px solid var(--line);border-radius:10px;padding:4px;flex-wrap:wrap;}
+  .tab-btn{font-family:'Inter';font-size:13px;font-weight:600;padding:8px 12px;border:none;background:transparent;border-radius:7px;cursor:pointer;color:var(--ink-soft);transition:.15s;white-space:nowrap;}
+  .tab-btn.active{background:var(--ink);color:var(--paper-warm);}
+  .tab-btn:hover:not(.active){background:rgba(0,0,0,0.06);}
+
+  .notebook{position:relative;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:28px 24px 28px 44px;box-shadow:0 2px 0 var(--line);margin-bottom:18px;}
+  .spiral{position:absolute;left:14px;top:0;bottom:0;width:14px;display:flex;flex-direction:column;justify-content:space-evenly;align-items:center;}
+  .spiral i{width:9px;height:9px;border-radius:50%;background:var(--paper);border:2px solid var(--line);display:block;}
+
+  .date-hero{font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:32px;line-height:1.1;margin:0 0 2px;text-transform:capitalize;}
+  .date-sub{font-size:13px;color:var(--ink-soft);margin-bottom:18px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.04em;}
+
+  .summary-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:22px;}
+  .sum-card{background:var(--paper-warm);border:1px solid var(--line);border-radius:10px;padding:12px 14px;}
+  .sum-card .num{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;color:var(--pine);}
+  .sum-card .lbl{font-size:10.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
+
+  .goal-row{display:flex;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid var(--line);}
+  .goal-row:last-child{border-bottom:none;}
+  .chk{width:26px;height:26px;border:2px solid var(--ink);border-radius:6px;flex:none;cursor:pointer;position:relative;background:var(--card);}
+  .chk.done{background:var(--pine);border-color:var(--pine);}
+  .chk svg{position:absolute;inset:0;width:100%;height:100%;}
+  .chk path{fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:24;stroke-dashoffset:24;}
+  .chk.done path{animation:draw .25s ease forwards;}
+  @keyframes draw{to{stroke-dashoffset:0;}}
+
+  .goal-info{flex:1;min-width:0;}
+  .goal-name{font-weight:600;font-size:15px;}
+  .goal-meta{font-size:12px;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;margin-top:1px;}
+  .goal-del{background:none;border:none;color:var(--ink-soft);opacity:.4;cursor:pointer;font-size:18px;padding:4px;}
+  .goal-del:hover{opacity:1;color:var(--brick);}
+
+  .empty{padding:30px 0;text-align:center;color:var(--ink-soft);font-size:14px;}
+
+  .close-day-btn{margin-top:10px;width:100%;padding:14px;border:none;border-radius:10px;background:var(--ink);color:var(--paper-warm);font-weight:700;font-size:14px;cursor:pointer;font-family:'Inter';letter-spacing:.01em;}
+  .close-day-btn:hover{opacity:.9;}
+
+  .extras-block{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0;}
+  .extra-input{background:var(--paper-warm);border:1px solid var(--line);border-radius:10px;padding:12px;}
+  .extra-input label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);margin-bottom:6px;font-family:'IBM Plex Mono',monospace;}
+  .extra-input input{width:100%;border:none;background:transparent;font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;color:var(--ink);outline:none;}
+
+  .add-goal-form{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+  .add-goal-form input{flex:1;min-width:160px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-family:'Inter';font-size:14px;background:var(--paper-warm);}
+  .add-goal-form button{padding:10px 18px;border:none;border-radius:8px;background:var(--pine);color:#fff;font-weight:700;cursor:pointer;font-family:'Inter';font-size:14px;}
+  .day-picker{display:flex;gap:6px;margin:10px 0 20px;flex-wrap:wrap;}
+  .day-chip{padding:7px 10px;border:1px solid var(--line);border-radius:7px;font-size:12px;font-family:'IBM Plex Mono',monospace;cursor:pointer;background:var(--paper-warm);color:var(--ink-soft);font-weight:600;}
+  .day-chip.on{background:var(--pine);color:#fff;border-color:var(--pine);}
+
+  .manage-row{padding:14px 0;border-bottom:1px solid var(--line);}
+  .manage-row:last-child{border-bottom:none;}
+  .manage-top{display:flex;align-items:center;gap:12px;}
+  .manage-name{flex:1;font-weight:600;font-size:14px;}
+  .goal-del{flex:none;}
+  .manage-days{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+
+  .week-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+  .week-nav button{background:var(--paper-warm);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:13px;}
+  .week-label{font-family:'Fraunces',serif;font-style:italic;font-size:18px;}
+  .grid-table{width:100%;border-collapse:collapse;font-size:12px;}
+  .grid-table th{font-family:'IBM Plex Mono',monospace;font-weight:500;color:var(--ink-soft);padding:6px 4px;text-align:center;font-size:11px;}
+  .grid-table td{text-align:center;padding:4px;}
+  .grid-table th:first-child, .grid-table td:first-child{text-align:left;padding-left:2px;}
+  .goal-label-cell{font-weight:600;font-size:13px;white-space:nowrap;}
+  .cell-box{width:26px;height:26px;border-radius:6px;border:2px solid var(--line);cursor:pointer;margin:0 auto;display:flex;align-items:center;justify-content:center;}
+  .cell-box.on{background:var(--pine);border-color:var(--pine);}
+  .cell-box.disabled{background:repeating-linear-gradient(45deg,var(--paper-warm),var(--paper-warm) 4px,var(--line) 4px,var(--line) 5px);cursor:default;border-color:var(--line);opacity:.6;}
+  .cell-box svg{width:14px;height:14px;}
+  .cell-box path{fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;}
+  .cell-box.today-col{outline:2px solid var(--ochre);outline-offset:2px;}
+
+  .stats-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:22px;}
+  .stat-card{background:var(--paper-warm);border:1px solid var(--line);border-radius:10px;padding:14px;}
+  .stat-card .num{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600;}
+  .stat-card .lbl{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;margin-top:2px;}
+  .stat-card.pine .num{color:var(--pine);}
+  .stat-card.brick .num{color:var(--brick);}
+
+  .bar-row{display:flex;align-items:center;gap:12px;padding:10px 0;}
+  .bar-name{width:170px;flex:none;font-size:13px;font-weight:600;}
+  .bar-track{flex:1;height:10px;background:var(--paper-warm);border-radius:6px;overflow:hidden;border:1px solid var(--line);}
+  .bar-fill{height:100%;background:var(--pine);border-radius:6px;transition:width .3s ease;}
+  .bar-fill.low{background:var(--brick);}
+  .bar-pct{width:44px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;}
+
+  .section-title{font-family:'Fraunces',serif;font-style:italic;font-size:20px;margin:26px 0 10px;}
+  .section-title:first-child{margin-top:0;}
+
+  .overlay{position:fixed;inset:0;background:rgba(38,38,34,0.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px;}
+  .modal{background:var(--card);border-radius:16px;padding:36px 30px;max-width:360px;width:100%;text-align:center;position:relative;}
+  .stamp{width:110px;height:110px;margin:0 auto 14px;transform:rotate(-8deg) scale(0);animation:stamp .4s cubic-bezier(.34,1.56,.64,1) forwards;}
+  @keyframes stamp{to{transform:rotate(-8deg) scale(1);}}
+  .stamp.miss{animation-name:stampMiss;}
+  @keyframes stampMiss{to{transform:rotate(6deg) scale(1);}}
+  .modal-title{font-family:'Fraunces',serif;font-style:italic;font-size:24px;margin-bottom:6px;}
+  .modal-msg{font-size:14px;color:var(--ink-soft);line-height:1.5;margin-bottom:20px;}
+  .modal-close{background:var(--ink);color:var(--paper-warm);border:none;padding:11px 24px;border-radius:8px;font-weight:700;cursor:pointer;font-family:'Inter';}
+
+  .loading{padding:60px;text-align:center;color:var(--ink-soft);}
+
+  .chart-box{background:var(--paper-warm);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px;}
+  .chart-title{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;margin-bottom:10px;}
+</style>
+<script type="text/babel" data-presets="react">
+const {useState,useEffect,useCallback,useMemo} = React;
+
+const DAY_LABELS = ['S','T','Q','Q','S','S','D'];
+const DAY_LABELS_FULL = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+const WEEKDAY_FULL = ['segunda','terça','quarta','quinta','sexta','sábado','domingo'];
+
+function fmtDate(d){
+  const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+day;
+}
+function dow(d){ return (d.getDay()+6)%7; }
+function startOfWeek(d){
+  const date = new Date(d);
+  date.setDate(date.getDate()-dow(date));
+  date.setHours(0,0,0,0);
+  return date;
+}
+function addDays(d,n){ const nd=new Date(d); nd.setDate(nd.getDate()+n); return nd; }
+function daysInMonth(year,month){ return new Date(year,month+1,0).getDate(); }
+
+const DEFAULT_GOALS = [
+  {id:'g1', name:'Acordar cedo 5:30', days:[0,1,2,3,4]},
+  {id:'g2', name:'Trabalhar focada', days:[0,1,2,3,4]},
+  {id:'g3', name:'Fazer 1h de exercício', days:[0,2,4]},
+  {id:'g4', name:'Natação', days:[0,2]},
+  {id:'g5', name:'Comer certinho', days:[0,1,2,3,4,5,6]},
+  {id:'g6', name:'Estudar 30min inglês', days:[0,1,2,3,4]},
+  {id:'g7', name:'Dormir cedo', days:[0,1,2,3,4]},
+  {id:'g8', name:'Check de metas e finanças', days:[5,6]},
+];
+
+function CheckIcon(){
+  return <svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6"/></svg>;
+}
+function StampSVG({ok}){
+  return (
+    <svg viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="45" fill="none" stroke={ok? '#3B6E5E':'#B0483D'} strokeWidth="5"/>
+      <circle cx="50" cy="50" r="36" fill="none" stroke={ok? '#3B6E5E':'#B0483D'} strokeWidth="2"/>
+      <text x="50" y="46" textAnchor="middle" fontFamily="IBM Plex Mono, monospace" fontSize="11" fontWeight="700" fill={ok? '#3B6E5E':'#B0483D'}>{ok? 'DIA' : 'QUASE'}</text>
+      <text x="50" y="62" textAnchor="middle" fontFamily="IBM Plex Mono, monospace" fontSize="11" fontWeight="700" fill={ok? '#3B6E5E':'#B0483D'}>{ok? 'CONCLUÍDO' : 'LÁ'}</text>
+    </svg>
+  );
+}
+
+function DayPicker({selected,onToggle}){
+  return (
+    <div className="day-picker">
+      {DAY_LABELS_FULL.map((lbl,i)=>(
+        <div key={i} className={"day-chip"+(selected.includes(i)?' on':'')} onClick={()=>onToggle(i)}>{lbl}</div>
+      ))}
+    </div>
+  );
+}
+
+function WeightChart({points}){
+  if(points.length<2) return <div style={{fontSize:13,color:'var(--ink-soft)'}}>Registre o peso por pelo menos 2 dias pra ver a evolução aqui.</div>;
+  const w=560,h=160,pad=28;
+  const vals = points.map(p=>p.v);
+  const min = Math.min(...vals)-0.3, max = Math.max(...vals)+0.3;
+  const xStep = (w-pad*2)/(points.length-1);
+  const scaleY = v => h-pad - ((v-min)/(max-min))*(h-pad*2);
+  const path = points.map((p,i)=> (i===0?'M':'L')+(pad+i*xStep)+','+scaleY(p.v)).join(' ');
+  return (
+    <svg viewBox={'0 0 '+w+' '+h} style={{width:'100%',height:160}}>
+      <path d={path} fill="none" stroke="#3B6E5E" strokeWidth="2.5"/>
+      {points.map((p,i)=>(
+        <circle key={i} cx={pad+i*xStep} cy={scaleY(p.v)} r="3.5" fill="#3B6E5E"/>
+      ))}
+      <text x={pad} y={14} fontSize="11" fontFamily="IBM Plex Mono, monospace" fill="#5B5B54">{max.toFixed(1)}kg</text>
+      <text x={pad} y={h-6} fontSize="11" fontFamily="IBM Plex Mono, monospace" fill="#5B5B54">{min.toFixed(1)}kg</text>
+    </svg>
+  );
+}
+
+function CaloriesChart({points}){
+  if(points.length===0) return <div style={{fontSize:13,color:'var(--ink-soft)'}}>Registre calorias queimadas pra ver o gráfico aqui.</div>;
+  const w=560,h=160,pad=24;
+  const max = Math.max(...points.map(p=>p.v),1);
+  const barW = (w-pad*2)/points.length*0.6;
+  const gap = (w-pad*2)/points.length;
+  return (
+    <svg viewBox={'0 0 '+w+' '+h} style={{width:'100%',height:160}}>
+      {points.map((p,i)=>{
+        const bh = (p.v/max)*(h-pad*2);
+        const x = pad+i*gap;
+        const y = h-pad-bh;
+        return <rect key={i} x={x} y={y} width={barW} height={bh} rx="3" fill="#C69A2A"/>;
+      })}
+    </svg>
+  );
+}
+
+function App(){
+  const [loaded,setLoaded] = useState(false);
+  const [goals,setGoals] = useState(DEFAULT_GOALS);
+  const [logs,setLogs] = useState({});
+  const [extras,setExtras] = useState({});
+  const [tab,setTab] = useState('hoje');
+  const [weekOffset,setWeekOffset] = useState(0);
+  const [modal,setModal] = useState(null);
+  const [newGoalName,setNewGoalName] = useState('');
+  const [newGoalDays,setNewGoalDays] = useState([0,1,2,3,4]);
+
+  useEffect(()=>{
+    (async ()=>{
+      try{ const g = await window.storage.get('goals', false); if(g && g.value) setGoals(JSON.parse(g.value)); }catch(e){}
+      try{ const l = await window.storage.get('logs', false); if(l && l.value) setLogs(JSON.parse(l.value)); }catch(e){}
+      try{ const ex = await window.storage.get('extras', false); if(ex && ex.value) setExtras(JSON.parse(ex.value)); }catch(e){}
+      setLoaded(true);
+    })();
+  },[]);
+
+  const saveGoals = useCallback(async (next)=>{ setGoals(next); try{ await window.storage.set('goals', JSON.stringify(next), false); }catch(e){console.error(e);} },[]);
+  const saveLogs = useCallback(async (next)=>{ setLogs(next); try{ await window.storage.set('logs', JSON.stringify(next), false); }catch(e){console.error(e);} },[]);
+  const saveExtras = useCallback(async (next)=>{ setExtras(next); try{ await window.storage.set('extras', JSON.stringify(next), false); }catch(e){console.error(e);} },[]);
+
+  const toggleLog = (dateKey, goalId)=>{
+    const day = {...(logs[dateKey]||{})};
+    day[goalId] = !day[goalId];
+    saveLogs({...logs, [dateKey]: day});
+  };
+  const setExtra = (dateKey, field, value)=>{
+    const day = {...(extras[dateKey]||{})};
+    day[field] = value;
+    saveExtras({...extras, [dateKey]: day});
+  };
+
+  const today = new Date();
+  const todayKey = fmtDate(today);
+  const todayDow = dow(today);
+  const todayLog = logs[todayKey] || {};
+  const todayExtra = extras[todayKey] || {};
+  const todaysGoals = goals.filter(g=>g.days.includes(todayDow));
+  const doneCount = todaysGoals.filter(g=>todayLog[g.id]).length;
+  const todayPct = todaysGoals.length>0 ? Math.round((doneCount/todaysGoals.length)*100) : 0;
+
+  function computeStats(startDate, rawEndDate){
+    const endDate = rawEndDate>today ? today : rawEndDate;
+    const days = Math.max(0, Math.round((endDate-startDate)/(1000*60*60*24)) + 1);
+    return goals.map(g=>{
+      let realizado=0, meta=0;
+      for(let i=0;i<days;i++){
+        const d = addDays(startDate,i);
+        const key = fmtDate(d);
+        if(g.days.includes(dow(d))){
+          meta++;
+          if(logs[key] && logs[key][g.id]) realizado++;
+        }
+      }
+      const pct = meta>0 ? Math.round((realizado/meta)*100) : 0;
+      return {...g, realizado, meta, pct};
+    });
+  }
+
+  const weekStart = addDays(startOfWeek(today), weekOffset*7);
+  const weekEnd = addDays(weekStart,6);
+  const weekStats = useMemo(()=>computeStats(weekStart, weekEnd), [goals, logs, weekOffset]);
+
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const monthEnd = new Date(today.getFullYear(), today.getMonth(), daysInMonth(today.getFullYear(), today.getMonth()));
+  const monthStats = useMemo(()=>computeStats(monthStart, monthEnd), [goals, logs]);
+
+  const overallMonth = useMemo(()=>{
+    const r = monthStats.reduce((a,s)=>a+s.realizado,0);
+    const m = monthStats.reduce((a,s)=>a+s.meta,0);
+    return m>0 ? Math.round((r/m)*100) : 0;
+  },[monthStats]);
+
+  const overallWeek = useMemo(()=>{
+    const r = weekStats.reduce((a,s)=>a+s.realizado,0);
+    const m = weekStats.reduce((a,s)=>a+s.meta,0);
+    return m>0 ? Math.round((r/m)*100) : 0;
+  },[weekStats]);
+
+  const daysAbove70 = useMemo(()=>{
+    const elapsedDays = today.getDate();
+    let count=0;
+    for(let i=0;i<elapsedDays;i++){
+      const d = addDays(monthStart,i);
+      const key = fmtDate(d);
+      const applicable = goals.filter(g=>g.days.includes(dow(d)));
+      if(applicable.length===0) continue;
+      const done = applicable.filter(g=>logs[key] && logs[key][g.id]).length;
+      const pct = (done/applicable.length)*100;
+      if(pct>=70) count++;
+    }
+    return count;
+  },[goals, logs]);
+
+  const closeDay = ()=>{
+    const total = todaysGoals.length;
+    const ok = total>0 && doneCount===total;
+    let msg;
+    if(total===0){ msg = 'Hoje não tem metas configuradas pra esse dia da semana.'; }
+    else if(ok){ msg = 'Você concluiu tudo hoje: '+todaysGoals.map(g=>g.name).join(', ')+'. Pode fechar o dia tranquila. Já pode dormir.'; }
+    else{
+      const missed = todaysGoals.filter(g=>!todayLog[g.id]).map(g=>g.name);
+      msg = 'Você concluiu '+doneCount+' de '+total+'. Ficou faltando: '+missed.join(', ')+'. Sem culpa — amanhã é um novo check.';
+    }
+    setModal({ok, msg, title: ok? 'Dia concluído' : doneCount+'/'+total+' hoje'});
+  };
+
+  const addGoal = (e)=>{
+    e.preventDefault();
+    if(!newGoalName.trim() || newGoalDays.length===0) return;
+    const id = 'g'+Date.now();
+    saveGoals([...goals, {id, name:newGoalName.trim(), days:[...newGoalDays].sort()}]);
+    setNewGoalName('');
+    setNewGoalDays([0,1,2,3,4]);
+  };
+  const deleteGoal = (id)=>{ saveGoals(goals.filter(g=>g.id!==id)); };
+  const toggleGoalDay = (goalId, dayIdx)=>{
+    saveGoals(goals.map(g=>{
+      if(g.id!==goalId) return g;
+      const has = g.days.includes(dayIdx);
+      const nextDays = has ? g.days.filter(d=>d!==dayIdx) : [...g.days, dayIdx].sort();
+      return {...g, days: nextDays};
+    }));
+  };
+  const toggleNewGoalDay = (dayIdx)=>{
+    setNewGoalDays(prev => prev.includes(dayIdx) ? prev.filter(d=>d!==dayIdx) : [...prev, dayIdx].sort());
+  };
+
+  const weightPoints = useMemo(()=>{
+    return Object.keys(extras).filter(k=>extras[k].weight!=null && extras[k].weight!=='')
+      .sort()
+      .map(k=>({date:k, v:parseFloat(extras[k].weight)}))
+      .filter(p=>!isNaN(p.v));
+  },[extras]);
+
+  const caloriesPoints = useMemo(()=>{
+    const dates = [];
+    for(let i=13;i>=0;i--) dates.push(fmtDate(addDays(today,-i)));
+    return dates.map(k=>({date:k, v: (extras[k] && extras[k].calories) ? parseFloat(extras[k].calories) : 0}));
+  },[extras]);
+
+  if(!loaded){ return <div className="loading">carregando seu placar...</div>; }
+
+  return (
+    <div className="wrap">
+      <div className="topbar">
+        <div className="brand">Placar <span>do dia</span></div>
+        <div className="tabs">
+          {[['hoje','Hoje'],['semana','Semana'],['mes','Mês'],['dashboard','Dashboard'],['estudos','Estudos'],['metas','Minhas metas']].map(([k,l])=>(
+            <button key={k} className={"tab-btn"+(tab===k?' active':'')} onClick={()=>setTab(k)}>{l}</button>
+          ))}
+        </div>
+      </div>
+
+      {tab==='hoje' && (
+        <div className="notebook">
+          <div className="spiral">{Array.from({length:9}).map((_,i)=><i key={i}></i>)}</div>
+          <div className="date-hero">{WEEKDAY_FULL[todayDow]}</div>
+          <div className="date-sub">{today.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})}</div>
+
+          <div className="summary-strip">
+            <div className="sum-card"><div className="num">{todayPct}%</div><div className="lbl">feito hoje</div></div>
+            <div className="sum-card"><div className="num">{daysAbove70}</div><div className="lbl">dias acima de 70% no mês</div></div>
+            <div className="sum-card"><div className="num">{overallMonth}%</div><div className="lbl">concluído no mês</div></div>
+          </div>
+
+          {todaysGoals.length===0 && <div className="empty">Nenhuma meta configurada pra hoje ({WEEKDAY_FULL[todayDow]}).</div>}
+
+          {todaysGoals.map(g=>{
+            const checked = !!todayLog[g.id];
+            return (
+              <div className="goal-row" key={g.id}>
+                <div className={"chk"+(checked?' done':'')} onClick={()=>toggleLog(todayKey,g.id)}>
+                  {checked && <CheckIcon/>}
+                </div>
+                <div className="goal-info">
+                  <div className="goal-name">{g.name}</div>
+                  <div className="goal-meta">{g.days.map(d=>DAY_LABELS_FULL[d]).join(', ')}</div>
+                </div>
+              </div>
+            );
+          })}
+
+          <div className="extras-block">
+            <div className="extra-input">
+              <label>Peso de hoje (kg)</label>
+              <input type="number" step="0.1" placeholder="—" value={todayExtra.weight||''} onChange={e=>setExtra(todayKey,'weight',e.target.value)} />
+            </div>
+            <div className="extra-input">
+              <label>Calorias queimadas hoje</label>
+              <input type="number" placeholder="—" value={todayExtra.calories||''} onChange={e=>setExtra(todayKey,'calories',e.target.value)} />
+            </div>
+          </div>
+
+          {todaysGoals.length>0 && <button className="close-day-btn" onClick={closeDay}>Fechar o dia ({doneCount}/{todaysGoals.length})</button>}
+        </div>
+      )}
+
+      {tab==='semana' && (
+        <div className="notebook">
+          <div className="spiral">{Array.from({length:9}).map((_,i)=><i key={i}></i>)}</div>
+          <div className="week-nav">
+            <button onClick={()=>setWeekOffset(w=>w-1)}>← anterior</button>
+            <div className="week-label">{weekStart.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'})} – {weekEnd.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'})}</div>
+            <button onClick={()=>setWeekOffset(w=>Math.min(0,w+1))} disabled={weekOffset===0}>próxima →</button>
+          </div>
+
+          <table className="grid-table">
+            <thead>
+              <tr>
+                <th></th>
+                {Array.from({length:7}).map((_,i)=>{ const d = addDays(weekStart,i); return <th key={i}>{DAY_LABELS[i]}<br/>{d.getDate()}</th>; })}
+              </tr>
+            </thead>
+            <tbody>
+              {goals.map(g=>(
+                <tr key={g.id}>
+                  <td className="goal-label-cell">{g.name}</td>
+                  {Array.from({length:7}).map((_,i)=>{
+                    const d = addDays(weekStart,i);
+                    const key = fmtDate(d);
+                    const isFuture = d > today;
+                    const isToday = key===todayKey;
+                    const applicable = g.days.includes(i);
+                    const on = logs[key] && logs[key][g.id];
+                    if(!applicable){
+                      return <td key={i}><div className="cell-box disabled"></div></td>;
+                    }
+                    return (
+                      <td key={i}>
+                        <div
+                          className={"cell-box"+(on?' on':'')+(isToday?' today-col':'')}
+                          style={isFuture?{opacity:.35,cursor:'default'}:{}}
+                          onClick={()=>{ if(!isFuture) toggleLog(key,g.id); }}
+                        >
+                          {on && <CheckIcon/>}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="section-title">Percentual da semana</div>
+          {weekStats.map(s=>(
+            <div className="bar-row" key={s.id}>
+              <div className="bar-name">{s.name}</div>
+              <div className="bar-track"><div className={"bar-fill"+(s.pct<50?' low':'')} style={{width:s.pct+'%'}}></div></div>
+              <div className="bar-pct">{s.pct}%</div>
+            </div>
+          ))}
+
+          <div className="stats-strip">
+            <div className="stat-card pine"><div className="num">{overallWeek}%</div><div className="lbl">concluído</div></div>
+            <div className="stat-card brick"><div className="num">{100-overallWeek}%</div><div className="lbl">faltando</div></div>
+          </div>
+        </div>
+      )}
+
+      {tab==='mes' && (
+        <div className="notebook">
+          <div className="spiral">{Array.from({length:9}).map((_,i)=><i key={i}></i>)}</div>
+          <div className="date-hero" style={{fontSize:26}}>{today.toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</div>
+          <div className="section-title" style={{marginTop:10}}>Percentual do mês por meta</div>
+          {monthStats.map(s=>(
+            <div className="bar-row" key={s.id}>
+              <div className="bar-name">{s.name}</div>
+              <div className="bar-track"><div className={"bar-fill"+(s.pct<50?' low':'')} style={{width:s.pct+'%'}}></div></div>
+              <div className="bar-pct">{s.pct}%</div>
+            </div>
+          ))}
+          <div className="stats-strip">
+            <div className="stat-card pine"><div className="num">{monthStats.reduce((a,s)=>a+s.realizado,0)}</div><div className="lbl">total realizado</div></div>
+            <div className="stat-card"><div className="num">{monthStats.reduce((a,s)=>a+s.meta,0)}</div><div className="lbl">meta até hoje</div></div>
+            <div className="stat-card brick"><div className="num">{100-overallMonth}%</div><div className="lbl">faltando</div></div>
+          </div>
+        </div>
+      )}
+
+      {tab==='dashboard' && (
+        <div className="notebook">
+          <div className="spiral">{Array.from({length:9}).map((_,i)=><i key={i}></i>)}</div>
+          <div className="section-title" style={{marginTop:0}}>Evolução do peso</div>
+          <div className="chart-box">
+            <div className="chart-title">peso registrado ao longo do tempo</div>
+            <WeightChart points={weightPoints}/>
+          </div>
+          <div className="section-title">Calorias queimadas por dia</div>
+          <div className="chart-box">
+            <div className="chart-title">últimos 14 dias</div>
+            <CaloriesChart points={caloriesPoints}/>
+          </div>
+        </div>
+      )}
+
+      {tab==='estudos' && (
+        <div className="notebook">
+          <div className="spiral">{Array.from({length:9}).map((_,i)=><i key={i}></i>)}</div>
+          <div className="section-title" style={{marginTop:0}}>Estudos</div>
+          <div className="empty">
+            Em breve: cadastre suas matérias com a lista de PDFs de cada uma, marque os que já leu,
+            e acompanhe o % concluído por matéria. Me conta como você quer organizar (nomes das matérias,
+            quantos materiais em cada) que eu construo essa parte.
+          </div>
+        </div>
+      )}
+
+      {tab==='metas' && (
+        <div className="notebook">
+          <div className="spiral">{Array.from({length:9}).map((_,i)=><i key={i}></i>)}</div>
+          <div className="section-title" style={{marginTop:0}}>Adicionar meta</div>
+          <form className="add-goal-form" onSubmit={addGoal}>
+            <input placeholder="Nome da meta (ex: Natação)" value={newGoalName} onChange={e=>setNewGoalName(e.target.value)} />
+            <button type="submit">Adicionar</button>
+          </form>
+          <DayPicker selected={newGoalDays} onToggle={toggleNewGoalDay}/>
+
+          <div className="section-title">Suas metas</div>
+          {goals.length===0 && <div className="empty">Nenhuma meta ainda.</div>}
+          {goals.map(g=>(
+            <div className="manage-row" key={g.id}>
+              <div className="manage-top">
+                <div className="manage-name">{g.name}</div>
+                <button className="goal-del" onClick={()=>deleteGoal(g.id)} title="remover">✕</button>
+              </div>
+              <div className="manage-days">
+                {DAY_LABELS_FULL.map((lbl,i)=>(
+                  <div key={i} className={"day-chip"+(g.days.includes(i)?' on':'')} onClick={()=>toggleGoalDay(g.id,i)}>{lbl}</div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modal && (
+        <div className="overlay" onClick={()=>setModal(null)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <div className={"stamp"+(modal.ok?'':' miss')}><StampSVG ok={modal.ok}/></div>
+            <div className="modal-title">{modal.title}</div>
+            <div className="modal-msg">{modal.msg}</div>
+            <button className="modal-close" onClick={()=>setModal(null)}>Fechar</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('app-root')).render(<App/>);
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
